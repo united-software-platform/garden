@@ -8,7 +8,8 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass, replace
+from dataclasses import field as dc_field
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +32,7 @@ class Version:
     patch: int
 
     @staticmethod
-    def parse(raw: Any, *, where: str) -> "Version":
+    def parse(raw: Any, *, where: str) -> Version:
         if not isinstance(raw, str):
             raise ModelError("версия должна быть строкой вида 1.2.0", where=where)
         parts = raw.split(".")
@@ -51,14 +52,14 @@ class TypeRef:
     name: str
 
     @staticmethod
-    def parse(raw: Any, *, where: str) -> "TypeRef":
+    def parse(raw: Any, *, where: str) -> TypeRef:
         if not isinstance(raw, str) or not raw:
             raise ModelError("тип поля должен быть непустой строкой", where=where)
         if raw in SCALAR_TYPES:
             return TypeRef("scalar", raw)
         for prefix, kind in (("enum.", "enum"), ("ref.", "ref")):
             if raw.startswith(prefix):
-                target = raw[len(prefix):]
+                target = raw[len(prefix) :]
                 if not target:
                     raise ModelError(f"после {prefix!r} не указано имя", where=where)
                 return TypeRef(kind, target)
@@ -81,7 +82,7 @@ class Taken:
     codes: tuple[int, ...] = ()
 
     @staticmethod
-    def parse(raw: Any, *, where: str) -> "Taken":
+    def parse(raw: Any, *, where: str) -> Taken:
         if raw is None:
             return Taken()
         if not isinstance(raw, dict):
@@ -148,7 +149,7 @@ class Cardinality:
     max: int | None = None
 
     @staticmethod
-    def parse(raw: Any, *, where: str) -> "Cardinality":
+    def parse(raw: Any, *, where: str) -> Cardinality:
         if raw is None:
             return Cardinality()
         if not isinstance(raw, dict):
@@ -161,7 +162,9 @@ class Cardinality:
         if not isinstance(low, int) or low < 0:
             raise ModelError("min должен быть целым не меньше нуля", where=where)
         if high is not None and (not isinstance(high, int) or high < 1):
-            raise ModelError("max должен быть целым не меньше единицы либо отсутствовать", where=where)
+            raise ModelError(
+                "max должен быть целым не меньше единицы либо отсутствовать", where=where
+            )
         if high is not None and high < low:
             raise ModelError("max меньше min", where=where)
         return Cardinality(low, high)
@@ -209,7 +212,12 @@ def load_model(root: Path) -> Model:
         raise ModelError("каталог модели не найден", where=str(root))
 
     manifest = _read_yaml(root / "_manifest.yaml")
-    _require_keys(manifest, {"model", "version"}, allowed={"model", "version", "enums"}, where="_manifest.yaml")
+    _require_keys(
+        manifest,
+        {"model", "version"},
+        allowed={"model", "version", "enums"},
+        where="_manifest.yaml",
+    )
 
     package = manifest["model"]
     if not isinstance(package, str) or not package:
@@ -227,9 +235,13 @@ def load_model(root: Path) -> Model:
     if taken_path.exists():
         extra = _read_yaml(taken_path)
         _require_keys(extra, set(), allowed={"types", "enums"}, where="_taken.yaml")
-        types = [_merge_taken(t, (extra.get("types") or {}).get(t.code), where="_taken.yaml") for t in types]
+        types = [
+            _merge_taken(t, (extra.get("types") or {}).get(t.code), where="_taken.yaml")
+            for t in types
+        ]
         enums = tuple(
-            _merge_taken(e, (extra.get("enums") or {}).get(e.name), where="_taken.yaml") for e in enums
+            _merge_taken(e, (extra.get("enums") or {}).get(e.name), where="_taken.yaml")
+            for e in enums
         )
 
     relations_path = root / "relations.yaml"
@@ -252,13 +264,13 @@ def load_model(root: Path) -> Model:
     )
 
 
-def _merge_taken(element, extra: Any, *, where: str):
+def _merge_taken[WithTaken: (NodeType, EnumDef)](
+    element: WithTaken, extra: Any, *, where: str
+) -> WithTaken:
     """Соединить занятые номера из файла элемента и из файла, который ведёт инструмент."""
     if extra is None:
         return element
     added = Taken.parse(extra, where=where)
-    from dataclasses import replace
-
     return replace(
         element,
         taken=Taken(
@@ -273,7 +285,9 @@ def _parse_enums(raw: Any) -> list[EnumDef]:
     if raw is None:
         return []
     if not isinstance(raw, dict):
-        raise ModelError("раздел enums должен быть отображением имя -> описание", where="_manifest.yaml")
+        raise ModelError(
+            "раздел enums должен быть отображением имя -> описание", where="_manifest.yaml"
+        )
     result: list[EnumDef] = []
     for name, body in raw.items():
         where = f"_manifest.yaml.enums.{name}"
@@ -283,7 +297,12 @@ def _parse_enums(raw: Any) -> list[EnumDef]:
         values = tuple(
             EnumValue(
                 id=_int(item.get("id"), where=f"{where}.values[{i}].id"),
-                name=_pattern(item.get("name"), ENUM_VALUE_RE, "ЗАГЛАВНЫМИ_С_ПОДЧЁРКИВАНИЕМ", where=f"{where}.values[{i}].name"),
+                name=_pattern(
+                    item.get("name"),
+                    ENUM_VALUE_RE,
+                    "ЗАГЛАВНЫМИ_С_ПОДЧЁРКИВАНИЕМ",
+                    where=f"{where}.values[{i}].name",
+                ),
             )
             for i, item in enumerate(_as_dict_list(body["values"], where=f"{where}.values"))
         )
@@ -339,12 +358,16 @@ def _parse_field(raw: dict[str, Any], *, where: str) -> Field:
         raise ModelError("required должен быть true или false", where=f"{where}.required")
     since = raw.get("required_since")
     if since is not None and (not isinstance(since, int) or since < 0):
-        raise ModelError("required_since должен быть средним разрядом версии", where=f"{where}.required_since")
+        raise ModelError(
+            "required_since должен быть средним разрядом версии", where=f"{where}.required_since"
+        )
     if since is not None and not required:
         raise ModelError("required_since указан у необязательного поля", where=where)
     return Field(
         id=_int(raw["id"], where=f"{where}.id"),
-        name=_pattern(raw["name"], NAME_RE, "строчными латинскими с подчёркиваниями", where=f"{where}.name"),
+        name=_pattern(
+            raw["name"], NAME_RE, "строчными латинскими с подчёркиваниями", where=f"{where}.name"
+        ),
         type=TypeRef.parse(raw["type"], where=f"{where}.type"),
         required=required,
         required_since=since,
@@ -358,7 +381,16 @@ def _parse_relation(raw: Any, *, where: str) -> Relation:
     _require_keys(
         raw,
         {"id", "name", "from", "to"},
-        allowed={"id", "name", "from", "to", "from_cardinality", "to_cardinality", "acyclic", "description"},
+        allowed={
+            "id",
+            "name",
+            "from",
+            "to",
+            "from_cardinality",
+            "to_cardinality",
+            "acyclic",
+            "description",
+        },
         where=where,
     )
     sources = _str_list(raw["from"], where=f"{where}.from")
@@ -372,11 +404,17 @@ def _parse_relation(raw: Any, *, where: str) -> Relation:
         raise ModelError("acyclic должен быть true или false", where=f"{where}.acyclic")
     return Relation(
         id=_int(raw["id"], where=f"{where}.id"),
-        name=_pattern(raw["name"], NAME_RE, "строчными латинскими с подчёркиваниями", where=f"{where}.name"),
+        name=_pattern(
+            raw["name"], NAME_RE, "строчными латинскими с подчёркиваниями", where=f"{where}.name"
+        ),
         sources=tuple(sources),
         targets=tuple(targets),
-        source_cardinality=Cardinality.parse(raw.get("from_cardinality"), where=f"{where}.from_cardinality"),
-        target_cardinality=Cardinality.parse(raw.get("to_cardinality"), where=f"{where}.to_cardinality"),
+        source_cardinality=Cardinality.parse(
+            raw.get("from_cardinality"), where=f"{where}.from_cardinality"
+        ),
+        target_cardinality=Cardinality.parse(
+            raw.get("to_cardinality"), where=f"{where}.to_cardinality"
+        ),
         acyclic=acyclic,
         description=raw.get("description"),
     )
@@ -402,7 +440,9 @@ def _require_keys(raw: Any, required: set[str], *, allowed: set[str], where: str
         raise ModelError("ожидалось отображение", where=where)
     missing = required - set(raw)
     if missing:
-        raise ModelError(f"отсутствуют обязательные ключи: {', '.join(sorted(missing))}", where=where)
+        raise ModelError(
+            f"отсутствуют обязательные ключи: {', '.join(sorted(missing))}", where=where
+        )
     unknown = set(raw) - allowed
     if unknown:
         raise ModelError(f"неизвестные ключи: {', '.join(sorted(unknown))}", where=where)

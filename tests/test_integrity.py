@@ -2,9 +2,9 @@
 
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import pytest
-
 from garden_model.checks import checks_for, run_checks
 from garden_model.descriptor import compile_model
 from garden_model.gen import postgres
@@ -40,8 +40,9 @@ def db(server, model_root):
 
 
 def _fetch(connection):
-    def run(sql: str) -> list[tuple]:
-        return connection.execute(sql).fetchall()
+    def run(sql: str) -> list[tuple[Any, ...]]:
+        rows: list[tuple[Any, ...]] = connection.execute(sql).fetchall()
+        return rows
 
     return run
 
@@ -54,7 +55,7 @@ def _node(connection, kind: str, num: int) -> int:
         "INSERT INTO node_revision (node_id, rev, mm_version, author) VALUES (%s, 1, 2, 'тест')",
         (row[0],),
     )
-    return row[0]
+    return int(row[0])
 
 
 # --- проверки целостности -------------------------------------------------

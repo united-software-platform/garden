@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from garden_model.descriptor import compile_model
 from garden_model.gen import postgres
 from garden_model.gen.changelog import emit, emit_baseline
@@ -46,7 +45,8 @@ def _apply(db, statements):
 def _sql_of(path: Path) -> list[str]:
     """Вынуть операторы из файла миграции, отбросив служебные строки."""
     body = [
-        line for line in path.read_text(encoding="utf-8").splitlines()
+        line
+        for line in path.read_text(encoding="utf-8").splitlines()
         if line and not line.startswith("--")
     ]
     return [s + ";" for s in "\n".join(body).split(";") if s.strip()]
@@ -60,7 +60,15 @@ def test_свёртка_модели_применяется_к_пустой_ба
         "SELECT table_name FROM information_schema.tables "
         "WHERE table_schema = 'public' ORDER BY table_name;"
     )
-    for expected in ("br_revision", "fr_revision", "link", "model_state", "node", "node_revision", "rel_signature"):
+    for expected in (
+        "br_revision",
+        "fr_revision",
+        "link",
+        "model_state",
+        "node",
+        "node_revision",
+        "rel_signature",
+    ):
         assert expected in tables
 
     assert "realizes" in db.psql("SELECT rel FROM rel_signature;")

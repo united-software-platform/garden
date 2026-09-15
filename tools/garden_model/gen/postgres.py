@@ -24,7 +24,7 @@ SCALAR_SQL = {
 def column_type(field: dict[str, Any]) -> str:
     """Тип колонки для поля дескриптора."""
     if field["kind"] == "enum":
-        return field["type"]
+        return str(field["type"])
     if field["kind"] == "ref":
         return "bigint"
     return SCALAR_SQL[field["type"]]
@@ -38,25 +38,25 @@ def render(op: Operation) -> tuple[list[str], list[str]]:
 def _add_column(p: dict[str, Any]) -> tuple[list[str], list[str]]:
     table, field = _table(p["type"]), p["field"]
     return (
-        [f'ALTER TABLE {table} ADD COLUMN {field["column"]} {column_type(field)};'],
-        [f'ALTER TABLE {table} DROP COLUMN {field["column"]};'],
+        [f"ALTER TABLE {table} ADD COLUMN {field['column']} {column_type(field)};"],
+        [f"ALTER TABLE {table} DROP COLUMN {field['column']};"],
     )
 
 
 def _drop_column(p: dict[str, Any]) -> tuple[list[str], list[str]]:
     table, field = _table(p["type"]), p["field"]
     return (
-        [f'ALTER TABLE {table} DROP COLUMN {field["column"]};'],
+        [f"ALTER TABLE {table} DROP COLUMN {field['column']};"],
         # Откат вернёт колонку, но не данные: удаление значений необратимо.
-        [f'ALTER TABLE {table} ADD COLUMN {field["column"]} {column_type(field)};'],
+        [f"ALTER TABLE {table} ADD COLUMN {field['column']} {column_type(field)};"],
     )
 
 
 def _rename_column(p: dict[str, Any]) -> tuple[list[str], list[str]]:
     table, was, now = _table(p["type"]), p["from"], p["field"]
     return (
-        [f'ALTER TABLE {table} RENAME COLUMN {was["column"]} TO {now["column"]};'],
-        [f'ALTER TABLE {table} RENAME COLUMN {now["column"]} TO {was["column"]};'],
+        [f"ALTER TABLE {table} RENAME COLUMN {was['column']} TO {now['column']};"],
+        [f"ALTER TABLE {table} RENAME COLUMN {now['column']} TO {was['column']};"],
     )
 
 
@@ -64,23 +64,24 @@ def _alter_column_type(p: dict[str, Any]) -> tuple[list[str], list[str]]:
     table, was, now = _table(p["type"]), p["from"], p["field"]
     return (
         [
-            f'ALTER TABLE {table} ALTER COLUMN {now["column"]} TYPE {column_type(now)} '
-            f'USING {now["column"]}::{column_type(now)};'
+            f"ALTER TABLE {table} ALTER COLUMN {now['column']} TYPE {column_type(now)} "
+            f"USING {now['column']}::{column_type(now)};"
         ],
         [
-            f'ALTER TABLE {table} ALTER COLUMN {was["column"]} TYPE {column_type(was)} '
-            f'USING {was["column"]}::{column_type(was)};'
+            f"ALTER TABLE {table} ALTER COLUMN {was['column']} TYPE {column_type(was)} "
+            f"USING {was['column']}::{column_type(was)};"
         ],
     )
 
 
 def _require_since(p: dict[str, Any]) -> tuple[list[str], list[str]]:
     table, field = _table(p["type"]), p["field"]
-    name = f'{p["type"].lower()}_{field["column"]}_since_{field["required_since"]}'
+    name = f"{p['type'].lower()}_{field['column']}_since_{field['required_since']}"
     return (
         [
             f"ALTER TABLE {table} ADD CONSTRAINT {name}\n"
-            f'  CHECK (mm_version < {field["required_since"]} OR {field["column"]} IS NOT NULL) NOT VALID;'
+            f"  CHECK (mm_version < {field['required_since']} "
+            f"OR {field['column']} IS NOT NULL) NOT VALID;"
         ],
         [f"ALTER TABLE {table} DROP CONSTRAINT {name};"],
     )
@@ -92,23 +93,30 @@ def _create_table(p: dict[str, Any]) -> tuple[list[str], list[str]]:
         "  node_id    bigint not null",
         "  rev        integer not null",
         "  mm_version integer not null",
-        f"  kind       node_kind not null default '{entry['code']}' check (kind = '{entry['code']}')",
+        f"  kind       node_kind not null default '{entry['code']}' "
+        f"check (kind = '{entry['code']}')",
     ]
-    columns += [f'  {f["column"]:<10} {column_type(f)}' for f in entry["fields"]]
+    columns += [f"  {f['column']:<10} {column_type(f)}" for f in entry["fields"]]
     body = ",\n".join(
-        columns
-        + [
+        [
+            *columns,
             "  primary key (node_id, rev)",
             "  foreign key (node_id, rev, mm_version)"
             " references node_revision(node_id, rev, mm_version)",
             "  foreign key (node_id, kind) references node(id, kind)",
         ]
     )
-    return ([f"CREATE TABLE {_table(entry['code'])} (\n{body}\n);"], [f"DROP TABLE {_table(entry['code'])};"])
+    return (
+        [f"CREATE TABLE {_table(entry['code'])} (\n{body}\n);"],
+        [f"DROP TABLE {_table(entry['code'])};"],
+    )
 
 
 def _drop_table(p: dict[str, Any]) -> tuple[list[str], list[str]]:
-    return ([f"DROP TABLE {_table(p['type']['code'])};"], ["-- восстановление таблицы с данными невозможно"])
+    return (
+        [f"DROP TABLE {_table(p['type']['code'])};"],
+        ["-- восстановление таблицы с данными невозможно"],
+    )
 
 
 def _add_node_kind(p: dict[str, Any]) -> tuple[list[str], list[str]]:
@@ -127,13 +135,19 @@ def _add_enum_value(p: dict[str, Any]) -> tuple[list[str], list[str]]:
 
 
 def _insert_signature(p: dict[str, Any]) -> tuple[list[str], list[str]]:
-    return (signature_rows(p["relation"]), [f"DELETE FROM rel_signature WHERE rel = '{p['relation']['name']}';"])
+    return (
+        signature_rows(p["relation"]),
+        [f"DELETE FROM rel_signature WHERE rel = '{p['relation']['name']}';"],
+    )
 
 
 def _delete_signature(p: dict[str, Any]) -> tuple[list[str], list[str]]:
     name = p["relation"]["name"]
     return (
-        [f"DELETE FROM link WHERE rel = '{name}';", f"DELETE FROM rel_signature WHERE rel = '{name}';"],
+        [
+            f"DELETE FROM link WHERE rel = '{name}';",
+            f"DELETE FROM rel_signature WHERE rel = '{name}';",
+        ],
         ["-- восстановление удалённых рёбер невозможно"],
     )
 
@@ -141,8 +155,14 @@ def _delete_signature(p: dict[str, Any]) -> tuple[list[str], list[str]]:
 def _update_signature(p: dict[str, Any]) -> tuple[list[str], list[str]]:
     relation = p["relation"]
     name = relation["name"]
-    statements = [f"DELETE FROM rel_signature WHERE rel = '{name}';"] + signature_rows(relation)
-    return (statements, [f"-- прежняя сигнатура связи {name} восстанавливается предыдущей миграцией"])
+    statements = [
+        f"DELETE FROM rel_signature WHERE rel = '{name}';",
+        *signature_rows(relation),
+    ]
+    return (
+        statements,
+        [f"-- прежняя сигнатура связи {name} восстанавливается предыдущей миграцией"],
+    )
 
 
 def signature_rows(relation: dict[str, Any]) -> list[str]:
@@ -153,16 +173,21 @@ def signature_rows(relation: dict[str, Any]) -> list[str]:
     for source in relation["from"]:
         for target in relation["to"]:
             rows.append(
-                "INSERT INTO rel_signature (rel, src_kind, dst_kind, src_min, src_max, dst_min, dst_max, acyclic)\n"
-                f"  VALUES ('{relation['name']}', '{source}', '{target}', "
-                f"{relation['from_cardinality']['min']}, {_null(relation['from_cardinality']['max'])}, "
+                "INSERT INTO rel_signature "
+                "(rel, src_kind, dst_kind, src_min, src_max, dst_min, dst_max, acyclic)\n"
+                f"  VALUES ('{relation['name']}', "
+                f"'{source}', '{target}', "
+                f"{relation['from_cardinality']['min']}, "
+                f"{_null(relation['from_cardinality']['max'])}, "
                 f"{relation['to_cardinality']['min']}, {_null(relation['to_cardinality']['max'])}, "
                 f"{str(relation['acyclic']).lower()});"
             )
     return rows
 
 
-def close_version(previous_hash: str | None, version: str, model_hash: str) -> tuple[list[str], list[str], str | None]:
+def close_version(
+    previous_hash: str | None, version: str, model_hash: str
+) -> tuple[list[str], list[str], str | None]:
     """Замыкающая миграция версии: предусловие на прежнее состояние и запись нового."""
     statements = [
         f"UPDATE model_state SET version = '{version}', hash = '{model_hash}';",
@@ -170,8 +195,7 @@ def close_version(previous_hash: str | None, version: str, model_hash: str) -> t
     rollback = ["-- откат версии выполняется откатом миграций этой версии"]
     if previous_hash is None:
         statements = [
-            "INSERT INTO model_state (version, hash) VALUES "
-            f"('{version}', '{model_hash}');"
+            f"INSERT INTO model_state (version, hash) VALUES ('{version}', '{model_hash}');"
         ]
         return statements, rollback, None
     precondition = f"SELECT count(*) FROM model_state WHERE hash = '{previous_hash}'"
@@ -189,10 +213,7 @@ def baseline_statements(descriptor: dict[str, Any]) -> list[str]:
     statements.append(f"CREATE TYPE node_kind AS ENUM ({kinds});")
 
     statements.append(
-        "CREATE TABLE model_state (\n"
-        "  version    text not null,\n"
-        "  hash       text not null\n"
-        ");"
+        "CREATE TABLE model_state (\n  version    text not null,\n  hash       text not null\n);"
     )
     statements.append(
         "CREATE TABLE node (\n"

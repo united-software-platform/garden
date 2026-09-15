@@ -42,7 +42,8 @@ def trade_copy(trade_model: Path, tmp_path: Path) -> Path:
 def statements_of(path: Path) -> list[str]:
     """Операторы SQL из файла миграции: служебные строки Liquibase отбрасываются."""
     body = [
-        line for line in path.read_text(encoding="utf-8").splitlines()
+        line
+        for line in path.read_text(encoding="utf-8").splitlines()
         if line and not line.startswith("--")
     ]
     return [chunk + ";" for chunk in "\n".join(body).split(";") if chunk.strip()]

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass
+from dataclasses import field as dc_field
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from .diff import BREAKING, DESTRUCTIVE, SAFE, Change, diff_descriptors
+from .diff import BREAKING, DESTRUCTIVE, Change, diff_descriptors
 from .errors import ModelError
 from .model import Version
 
@@ -37,7 +38,9 @@ class ReleasePlan:
     def report(self) -> str:
         if self.is_noop:
             return f"модель не изменялась: {self.current['version']}, выпускать нечего"
-        lines = [f"{self.previous['version'] if self.previous else 'пусто'} -> {self.current['version']}"]
+        lines = [
+            f"{self.previous['version'] if self.previous else 'пусто'} -> {self.current['version']}"
+        ]
         lines += [f"  {change}" for change in self.changes] or ["  начальный выпуск модели"]
         for change in self.warnings:
             lines.append(f"ВНИМАНИЕ  {change.element}: {change.detail}")
@@ -82,7 +85,8 @@ def plan_release(current: dict[str, Any], previous: dict[str, Any] | None) -> Re
         )
     if same_hash and new_version > old_version:
         raise GateError(
-            f"версия повышена до {new_version}, но структура модели не изменилась: выпускать нечего",
+            f"версия повышена до {new_version}, но структура модели не изменилась: "
+            "выпускать нечего",
             where="выпуск",
         )
 
@@ -129,6 +133,10 @@ def record_taken(model_root: Path, changes: list[Change]) -> list[str]:
         recorded.append(f"{code}.{field['id']} ({field['name']})")
 
     if recorded:
-        header = "# Занятые навсегда номера и имена. Файл ведёт инструмент, править вручную не нужно.\n"
-        path.write_text(header + yaml.safe_dump(data, allow_unicode=True, sort_keys=True), encoding="utf-8")
+        header = (
+            "# Занятые навсегда номера и имена. Файл ведёт инструмент, править вручную не нужно.\n"
+        )
+        path.write_text(
+            header + yaml.safe_dump(data, allow_unicode=True, sort_keys=True), encoding="utf-8"
+        )
     return recorded

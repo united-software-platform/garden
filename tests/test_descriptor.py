@@ -2,7 +2,6 @@
 
 import pytest
 import yaml
-
 from garden_model.descriptor import compile_model, dump_descriptor
 from garden_model.errors import ModelError
 from garden_model.model import load_model
@@ -101,10 +100,16 @@ def test_номер_версии_в_хеш_не_входит(model_copy, model_r
 @pytest.mark.parametrize(
     "mutate, expected",
     [
-        (lambda raw: raw["fields"].append({"id": 1, "name": "other", "type": "text"}), "номер поля"),
+        (
+            lambda raw: raw["fields"].append({"id": 1, "name": "other", "type": "text"}),
+            "номер поля",
+        ),
         (lambda raw: raw["fields"].append({"id": 9, "name": "title", "type": "text"}), "имя поля"),
         (lambda raw: raw["fields"].append({"id": 7, "name": "again", "type": "text"}), "занятым"),
-        (lambda raw: raw["fields"].append({"id": 8, "name": "note", "type": "enum.missing"}), "перечисление"),
+        (
+            lambda raw: raw["fields"].append({"id": 8, "name": "note", "type": "enum.missing"}),
+            "перечисление",
+        ),
         (lambda raw: raw["fields"].append({"id": 8, "name": "note", "type": "ref.XX"}), "тип узла"),
     ],
 )

@@ -6,10 +6,32 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from ..diff import Change
+from ..errors import ModelError
+
+
+class Backend(Protocol):
+    """Бэкенд СУБД: превращает нейтральные операции в диалект.
+
+    Протокол описывает ровно то, что от бэкенда требует раскладка, и позволяет
+    передавать модуль бэкенда как значение — второй бэкенд появится рядом и подойдёт
+    под тот же протокол без правок раскладки.
+    """
+
+    NAME: str
+
+    def render(self, op: Operation) -> tuple[list[str], list[str]]: ...
+
+    def close_version(
+        self, previous_hash: str | None, version: str, model_hash: str
+    ) -> tuple[list[str], list[str], str | None]: ...
+
+    def baseline_statements(self, descriptor: dict[str, Any]) -> list[str]: ...
+
 
 #: Каталог для элементов, не принадлежащих ни одному типу узла.
 CORE = "core"
@@ -91,29 +113,54 @@ def _require_op(code: str, field: dict[str, Any], comment: str) -> Operation:
 def _type_added(change: Change) -> list[Operation]:
     entry = change.payload["type"]
     return [
-        Operation("create_table", _type_folder(entry["code"]), f"{entry['code']}.create",
-                  change.detail, {"type": entry}),
-        Operation("add_node_kind", CORE, f"kind.{entry['code']}.add",
-                  f"тип узла {entry['code']} добавлен в перечень видов узлов", {"type": entry}),
+        Operation(
+            "create_table",
+            _type_folder(entry["code"]),
+            f"{entry['code']}.create",
+            change.detail,
+            {"type": entry},
+        ),
+        Operation(
+            "add_node_kind",
+            CORE,
+            f"kind.{entry['code']}.add",
+            f"тип узла {entry['code']} добавлен в перечень видов узлов",
+            {"type": entry},
+        ),
     ]
 
 
 def _type_removed(change: Change) -> list[Operation]:
     entry = change.payload["type"]
     return [
-        Operation("drop_table", _type_folder(entry["code"]), f"{entry['code']}.drop",
-                  change.detail, {"type": entry})
+        Operation(
+            "drop_table",
+            _type_folder(entry["code"]),
+            f"{entry['code']}.drop",
+            change.detail,
+            {"type": entry},
+        )
     ]
 
 
-def _relation_op(kind: str, suffix: str):
+def _relation_op(kind: str, suffix: str) -> Callable[[Change], list[Operation]]:
     def build(change: Change) -> list[Operation]:
-        entry = change.payload.get("relation")
-        if isinstance(entry, str):
-            entry = {"name": entry}
+        raw = change.payload.get("relation")
+        # Дельта называет связь либо описанием, либо одним именем — например, когда
+        # сигнатура удалена и описывать больше нечего.
+        entry = {"name": raw} if isinstance(raw, str) else raw
+        if not isinstance(entry, dict):
+            raise ModelError(
+                f"операция {kind} не называет связь", where=f"дельта: {change.element}"
+            )
         return [
-            Operation(kind, RELATIONS, f"rel.{entry['name']}.{suffix}", change.detail,
-                      {"relation": entry, "codes": change.payload.get("codes", [])})
+            Operation(
+                kind,
+                RELATIONS,
+                f"rel.{entry['name']}.{suffix}",
+                change.detail,
+                {"relation": entry, "codes": change.payload.get("codes", [])},
+            )
         ]
 
     return build
@@ -121,9 +168,13 @@ def _relation_op(kind: str, suffix: str):
 
 def _enum_value_added(change: Change) -> list[Operation]:
     return [
-        Operation("add_enum_value", CORE,
-                  f"enum.{change.payload['enum']}.{change.payload['value']['name']}",
-                  change.detail, dict(change.payload))
+        Operation(
+            "add_enum_value",
+            CORE,
+            f"enum.{change.payload['enum']}.{change.payload['value']['name']}",
+            change.detail,
+            dict(change.payload),
+        )
     ]
 
 

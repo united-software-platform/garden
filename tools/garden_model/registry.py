@@ -54,5 +54,7 @@ def verify_immutability(changelog_root: Path) -> list[str]:
             if not path.exists():
                 problems.append(f"{item['path']}: файл выпуска {entry['version']} удалён")
             elif checksum(path) != item["checksum"]:
-                problems.append(f"{item['path']}: файл выпуска {entry['version']} изменён после выпуска")
+                problems.append(
+                    f"{item['path']}: файл выпуска {entry['version']} изменён после выпуска"
+                )
     return problems

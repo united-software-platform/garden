@@ -11,7 +11,8 @@ import hashlib
 import json
 from typing import Any
 
-from .model import Model, NodeType, Relation
+from .errors import ModelError
+from .model import EnumDef, Field, Model, NodeType, Relation, Taken
 from .validate import validate_model
 
 #: Ключи, не входящие в хеш: их изменение не меняет ни структуру, ни данные.
@@ -39,9 +40,9 @@ def compile_model(model: Model) -> dict[str, Any]:
         "types": [_type(model, t) for t in model.types],
         "relations": [_relation(r) for r in model.relations],
     }
-    body["hash"] = "sha256:" + hashlib.sha256(
-        canonical_json(_structural(body)).encode("utf-8")
-    ).hexdigest()
+    body["hash"] = (
+        "sha256:" + hashlib.sha256(canonical_json(_structural(body)).encode("utf-8")).hexdigest()
+    )
     return body
 
 
@@ -64,7 +65,7 @@ def _structural(value: Any) -> Any:
     return value
 
 
-def _enum(enum) -> dict[str, Any]:
+def _enum(enum: EnumDef) -> dict[str, Any]:
     return {
         "id": enum.id,
         "name": enum.name,
@@ -87,7 +88,7 @@ def _type(model: Model, node: NodeType) -> dict[str, Any]:
     }
 
 
-def _field(model: Model, field) -> dict[str, Any]:
+def _field(model: Model, field: Field) -> dict[str, Any]:
     entry: dict[str, Any] = {
         "id": field.id,
         "name": field.name,
@@ -101,6 +102,13 @@ def _field(model: Model, field) -> dict[str, Any]:
     }
     if field.type.kind == "enum":
         enum = model.enum_by_name(field.type.name)
+        if enum is None:
+            # Ссылку на несуществующее перечисление отвергает validate_model; проверка
+            # здесь закрывает случай вызова компиляции в обход валидации.
+            raise ModelError(
+                f"поле ссылается на неизвестное перечисление {field.type.name!r}",
+                where=f"поле {field.name}",
+            )
         entry["values"] = [v.name for v in enum.values]
     return entry
 
@@ -111,12 +119,18 @@ def _relation(relation: Relation) -> dict[str, Any]:
         "name": relation.name,
         "from": list(relation.sources),
         "to": list(relation.targets),
-        "from_cardinality": {"min": relation.source_cardinality.min, "max": relation.source_cardinality.max},
-        "to_cardinality": {"min": relation.target_cardinality.min, "max": relation.target_cardinality.max},
+        "from_cardinality": {
+            "min": relation.source_cardinality.min,
+            "max": relation.source_cardinality.max,
+        },
+        "to_cardinality": {
+            "min": relation.target_cardinality.min,
+            "max": relation.target_cardinality.max,
+        },
         "acyclic": relation.acyclic,
         "description": relation.description,
     }
 
 
-def _taken(taken) -> dict[str, Any]:
+def _taken(taken: Taken) -> dict[str, Any]:
     return {"fields": list(taken.fields), "names": list(taken.names), "codes": list(taken.codes)}

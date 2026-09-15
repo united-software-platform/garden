@@ -4,7 +4,6 @@ import shutil
 
 import pytest
 import yaml
-
 from garden_model import registry
 from garden_model.cli import main
 
@@ -23,13 +22,18 @@ def workspace(model_root, tmp_path):
 
 
 def _run(workspace, command, *extra):
-    return main([
-        command,
-        "--model", str(workspace["model"]),
-        "--releases", str(workspace["releases"]),
-        "--changelog", str(workspace["changelog"]),
-        *extra,
-    ])
+    return main(
+        [
+            command,
+            "--model",
+            str(workspace["model"]),
+            "--releases",
+            str(workspace["releases"]),
+            "--changelog",
+            str(workspace["changelog"]),
+            *extra,
+        ]
+    )
 
 
 def _bump(workspace, version, mutate=None):
@@ -69,7 +73,11 @@ def test_повторный_выпуск_ничего_не_создаёт(worksp
 
 def test_выпуск_изменения_печатает_дельту(workspace, capsys):
     _run(workspace, "gen", "--baseline")
-    _bump(workspace, "1.3.0", lambda raw: raw["fields"].append({"id": 6, "name": "owner", "type": "text"}))
+    _bump(
+        workspace,
+        "1.3.0",
+        lambda raw: raw["fields"].append({"id": 6, "name": "owner", "type": "text"}),
+    )
 
     assert _run(workspace, "gen") == 0
     out = capsys.readouterr().out
@@ -91,7 +99,11 @@ def test_удаление_поля_выпускается_с_предупреж�
 
 def test_правка_без_повышения_версии_останавливает(workspace, capsys):
     _run(workspace, "gen", "--baseline")
-    _bump(workspace, "1.2.0", lambda raw: raw["fields"].append({"id": 6, "name": "owner", "type": "text"}))
+    _bump(
+        workspace,
+        "1.2.0",
+        lambda raw: raw["fields"].append({"id": 6, "name": "owner", "type": "text"}),
+    )
 
     assert _run(workspace, "gen") == 1
     assert "повысьте средний разряд" in capsys.readouterr().err

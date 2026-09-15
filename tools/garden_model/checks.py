@@ -7,10 +7,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable
+from typing import Any
 
-Fetch = Callable[[str], list[tuple]]
+Fetch = Callable[[str], list[tuple[Any, ...]]]
 
 
 @dataclass(frozen=True)
@@ -26,7 +27,7 @@ class Check:
 class Violation:
     check: str
     subject: str
-    rows: list[tuple]
+    rows: list[tuple[Any, ...]]
 
     def __str__(self) -> str:
         listing = ", ".join(str(row[0]) for row in self.rows[:5])
@@ -36,7 +37,11 @@ class Violation:
 
 def checks_for(descriptor: dict[str, Any]) -> list[Check]:
     """Собрать перечень проверок целостности из дескриптора."""
-    return [*_cardinality_checks(descriptor), *_acyclicity_checks(descriptor), suspect_links_check()]
+    return [
+        *_cardinality_checks(descriptor),
+        *_acyclicity_checks(descriptor),
+        suspect_links_check(),
+    ]
 
 
 def _cardinality_checks(descriptor: dict[str, Any]) -> list[Check]:
@@ -51,17 +56,25 @@ def _cardinality_checks(descriptor: dict[str, Any]) -> list[Check]:
             if minimum >= 1:
                 checks.append(
                     _cardinality_check(
-                        relation["name"], side, column, listing,
+                        relation["name"],
+                        side,
+                        column,
+                        listing,
                         f"узел без обязательной связи {relation['name']} (минимум {minimum})",
-                        f"< {minimum}", suffix="min",
+                        f"< {minimum}",
+                        suffix="min",
                     )
                 )
             if maximum is not None:
                 checks.append(
                     _cardinality_check(
-                        relation["name"], side, column, listing,
+                        relation["name"],
+                        side,
+                        column,
+                        listing,
                         f"узел со связями {relation['name']} сверх предела (максимум {maximum})",
-                        f"> {maximum}", suffix="max",
+                        f"> {maximum}",
+                        suffix="max",
                     )
                 )
     return checks

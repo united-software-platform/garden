@@ -6,10 +6,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
-Fetch = Callable[[str], list[tuple]]
+Fetch = Callable[[str], list[tuple[Any, ...]]]
 
 COLUMNS_SQL = (
     "SELECT table_name, column_name FROM information_schema.columns "
@@ -52,9 +53,13 @@ def verify_schema(descriptor: dict[str, Any], fetch: Fetch) -> list[Drift]:
             drifts.append(Drift(table, "таблица описана моделью, но в хранилище отсутствует"))
             continue
         for column in sorted(columns - actual[table]):
-            drifts.append(Drift(f"{table}.{column}", "колонка описана моделью, но в хранилище отсутствует"))
+            drifts.append(
+                Drift(f"{table}.{column}", "колонка описана моделью, но в хранилище отсутствует")
+            )
         for column in sorted(actual[table] - columns):
-            drifts.append(Drift(f"{table}.{column}", "колонка есть в хранилище, но модель её не описывает"))
+            drifts.append(
+                Drift(f"{table}.{column}", "колонка есть в хранилище, но модель её не описывает")
+            )
 
     drifts += _verify_state(descriptor, fetch)
     return drifts

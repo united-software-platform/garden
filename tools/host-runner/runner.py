@@ -60,11 +60,13 @@ class RunnerHandler(BaseHTTPRequestHandler):
 
     server_version = "host-runner/1.4"
 
-    def do_GET(self) -> None:  # noqa: N802 — имя задано BaseHTTPRequestHandler
+    # Имя метода задано BaseHTTPRequestHandler и переименованию не подлежит.
+    def do_GET(self) -> None:
         # Ответ обязателен при любом исходе: без него клиент виснет до своего таймаута
         try:
             self._dispatch()
-        except Exception as error:  # noqa: BLE001 — раннер не должен падать молча
+        # Перехват любого исключения намеренный: раннер не должен падать молча.
+        except Exception as error:
             self._reply(500, f"Внутренняя ошибка раннера: {error!r}\n")
 
     def _dispatch(self) -> None:

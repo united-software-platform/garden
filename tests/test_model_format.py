@@ -2,7 +2,6 @@
 
 import pytest
 import yaml
-
 from garden_model.errors import ModelError
 from garden_model.model import Version, load_model
 
@@ -66,6 +65,7 @@ def test_связь_без_домена_или_кодомена_отвергае
 def test_занятые_номера_имена_и_коды_разбираются(model_root):
     br = load_model(model_root).type_by_code("BR")
 
+    assert br is not None
     assert br.taken.fields == (7,)
     assert br.taken.names == ("priority",)
     assert br.taken.codes == (19,)
@@ -74,6 +74,7 @@ def test_занятые_номера_имена_и_коды_разбираютс
 def test_обязательность_начиная_с_версии_разбирается(model_root):
     br = load_model(model_root).type_by_code("BR")
 
+    assert br is not None
     rationale = next(f for f in br.fields if f.name == "rationale")
     assert rationale.required is True
     assert rationale.required_since == 2

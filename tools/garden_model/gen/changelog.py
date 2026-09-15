@@ -7,17 +7,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 
 import yaml
 
 from ..diff import Change
 from ..release import ReleasePlan
 from . import postgres
-from .ops import CORE, RELATIONS, Operation, operations_for
+from .ops import CORE, RELATIONS, Backend, Operation, operations_for
 
 AUTHOR = "model-gen"
 MASTER = "master.yaml"
@@ -39,7 +40,7 @@ class Emitted:
 
 
 def utc_clock() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def emit(
@@ -47,7 +48,7 @@ def emit(
     changelog_root: Path,
     *,
     clock: Callable[[], datetime] = utc_clock,
-    backend=postgres,
+    backend: Backend = postgres,
 ) -> Emitted:
     """Выпустить миграции версии и дописать порядок применения в `master.yaml`."""
     if plan.is_noop:
@@ -63,7 +64,13 @@ def emit(
     for index, op in enumerate(_ordered(plan)):
         statements, rollback = backend.render(op)
         written.append(
-            _write(changelog_root, op.folder, moment, index, _body(op.slug, version, op.comment, statements, rollback))
+            _write(
+                changelog_root,
+                op.folder,
+                moment,
+                index,
+                _body(op.slug, version, op.comment, statements, rollback),
+            )
         )
 
     closing = _closing(plan, backend, version)
@@ -78,7 +85,7 @@ def emit_baseline(
     changelog_root: Path,
     *,
     clock: Callable[[], datetime] = utc_clock,
-    backend=postgres,
+    backend: Backend = postgres,
 ) -> Emitted:
     """Выпустить свёртку модели целиком — начальную миграцию для пустого хранилища."""
     changelog_root.mkdir(parents=True, exist_ok=True)
@@ -99,8 +106,13 @@ def emit_baseline(
             CORE,
             moment,
             1,
-            _body(f"close.{descriptor['version']}", descriptor["version"],
-                  f"отпечаток модели {descriptor['version']}", statements, rollback),
+            _body(
+                f"close.{descriptor['version']}",
+                descriptor["version"],
+                f"отпечаток модели {descriptor['version']}",
+                statements,
+                rollback,
+            ),
         )
     )
     _append_master(changelog_root, written)
@@ -115,13 +127,17 @@ def _ordered(plan: ReleasePlan) -> list[Operation]:
     return sorted(operations, key=lambda op: (FOLDER_RANK.get(op.folder, TYPE_RANK), op.slug))
 
 
-def _closing(plan: ReleasePlan, backend, version: str) -> str:
+def _closing(plan: ReleasePlan, backend: Backend, version: str) -> str:
     previous_hash = plan.previous["hash"] if plan.previous else None
-    statements, rollback, precondition = backend.close_version(previous_hash, version, plan.current["hash"])
+    statements, rollback, precondition = backend.close_version(
+        previous_hash, version, plan.current["hash"]
+    )
     comment = f"{plan.previous['version'] if plan.previous else 'начало'} -> {version}"
     if not plan.changes:
         comment += "; схема не меняется"
-    return _body(f"close.{version}", version, comment, statements, rollback, precondition=precondition)
+    return _body(
+        f"close.{version}", version, comment, statements, rollback, precondition=precondition
+    )
 
 
 def _body(
@@ -153,7 +169,7 @@ def _write(root: Path, folder: str, moment: datetime, offset: int, body: str) ->
     # миграцию — берётся следующая свободная секунда.
     stamp = int(moment.replace(microsecond=0).timestamp()) + offset
     while True:
-        name = datetime.fromtimestamp(stamp, tz=timezone.utc).strftime("Version%Y%m%d%H%M%S.sql")
+        name = datetime.fromtimestamp(stamp, tz=UTC).strftime("Version%Y%m%d%H%M%S.sql")
         path = directory / name
         if not path.exists():
             break
@@ -170,10 +186,12 @@ def _append_master(root: Path, written: list[Path]) -> None:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         existing = data.get("databaseChangeLog", [])
     entries = existing + [
-        {"include": {"file": str(p.relative_to(root)), "relativeToChangelogFile": True}} for p in written
+        {"include": {"file": str(p.relative_to(root)), "relativeToChangelogFile": True}}
+        for p in written
     ]
     header = "# Порядок применения миграций. Файл генерируется, править вручную не нужно.\n"
     path.write_text(
-        header + yaml.safe_dump({"databaseChangeLog": entries}, allow_unicode=True, sort_keys=False),
+        header
+        + yaml.safe_dump({"databaseChangeLog": entries}, allow_unicode=True, sort_keys=False),
         encoding="utf-8",
     )

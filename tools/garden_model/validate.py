@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from typing import Any
+
 from .errors import ModelError
 from .model import Model, NodeType
 
@@ -49,9 +52,13 @@ def _validate_type(model: Model, node: NodeType) -> None:
     for field in node.fields:
         field_where = f"{where}, поле {field.id} ({field.name})"
         if field.type.kind == "enum" and model.enum_by_name(field.type.name) is None:
-            raise ModelError(f"ссылка на несуществующее перечисление {field.type.name!r}", where=field_where)
+            raise ModelError(
+                f"ссылка на несуществующее перечисление {field.type.name!r}", where=field_where
+            )
         if field.type.kind == "ref" and model.type_by_code(field.type.name) is None:
-            raise ModelError(f"ссылка на несуществующий тип узла {field.type.name!r}", where=field_where)
+            raise ModelError(
+                f"ссылка на несуществующий тип узла {field.type.name!r}", where=field_where
+            )
         if field.required_since is not None and field.required_since > model.version.minor:
             raise ModelError(
                 f"required_since {field.required_since} больше текущего среднего разряда "
@@ -60,15 +67,15 @@ def _validate_type(model: Model, node: NodeType) -> None:
             )
 
 
-def _check_unique(values: list, subject: str, *, where: str) -> None:
-    seen: set = set()
+def _check_unique(values: list[Any], subject: str, *, where: str) -> None:
+    seen: set[Any] = set()
     for value in values:
         if value in seen:
             raise ModelError(f"{subject} {value!r} встречается дважды", where=where)
         seen.add(value)
 
 
-def _check_taken(active: list, taken, subject: str, *, where: str) -> None:
+def _check_taken(active: list[Any], taken: Iterable[Any], subject: str, *, where: str) -> None:
     occupied = set(taken)
     for value in active:
         if value in occupied:

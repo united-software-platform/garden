@@ -8,16 +8,17 @@
 
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
-
-from conftest import statements_of
 from garden_model.checks import checks_for, run_checks
 from garden_model.cli import main
 from garden_model.descriptor import compile_model
 from garden_model.model import load_model
 from garden_model.verify import verify_schema
+
+from tests.conftest import statements_of
 
 pgserver = pytest.importorskip("pgserver")
 psycopg = pytest.importorskip("psycopg")
@@ -49,36 +50,57 @@ def _edit(root: Path, name: str, mutate):
 def _release(root: Path, workspace: Path, version: str | None, *extra) -> int:
     if version is not None:
         _edit(root, "_manifest.yaml", lambda d: d.update(version=version))
-    return main([
-        "gen",
-        "--model", str(root),
-        "--releases", str(workspace / "releases"),
-        "--changelog", str(workspace / "changelog"),
-        *extra,
-    ])
+    return main(
+        [
+            "gen",
+            "--model",
+            str(root),
+            "--releases",
+            str(workspace / "releases"),
+            "--changelog",
+            str(workspace / "changelog"),
+            *extra,
+        ]
+    )
 
 
 def _evolve(root: Path, workspace: Path) -> None:
     """Пять выпусков: свёртка, добавление, обязательность с версии, переименование, удаление."""
     assert _release(root, workspace, None, "--baseline") == 0
 
-    _edit(root, "types/ord.yaml", lambda d: d["fields"].append({"id": 6, "name": "discount", "type": "int"}))
-    _edit(root, "types/prod.yaml", lambda d: [
-        f.update(required=True, required_since=1) for f in d["fields"] if f["name"] == "active"
-    ])
+    _edit(
+        root,
+        "types/ord.yaml",
+        lambda d: d["fields"].append({"id": 6, "name": "discount", "type": "int"}),
+    )
+    _edit(
+        root,
+        "types/prod.yaml",
+        lambda d: [
+            f.update(required=True, required_since=1) for f in d["fields"] if f["name"] == "active"
+        ],
+    )
     assert _release(root, workspace, "1.1.0") == 0
 
-    _edit(root, "types/ord.yaml", lambda d: [
-        f.update(name="note") for f in d["fields"] if f["name"] == "comment"
-    ])
+    _edit(
+        root,
+        "types/ord.yaml",
+        lambda d: [f.update(name="note") for f in d["fields"] if f["name"] == "comment"],
+    )
     assert _release(root, workspace, "1.2.0") == 0
 
-    _edit(root, "types/ship.yaml", lambda d: d.__setitem__(
-        "fields", [f for f in d["fields"] if f["name"] != "tracking"]
-    ))
+    _edit(
+        root,
+        "types/ship.yaml",
+        lambda d: d.__setitem__("fields", [f for f in d["fields"] if f["name"] != "tracking"]),
+    )
     assert _release(root, workspace, "1.3.0") == 0
 
-    _edit(root, "types/cust.yaml", lambda d: d["fields"].append({"id": 4, "name": "phone", "type": "text"}))
+    _edit(
+        root,
+        "types/cust.yaml",
+        lambda d: d["fields"].append({"id": 4, "name": "phone", "type": "text"}),
+    )
     assert _release(root, workspace, "1.4.0") == 0
 
 
@@ -93,17 +115,20 @@ def _apply_all(connection, changelog: Path) -> int:
 
 
 def _fetch(connection):
-    def run(sql: str) -> list[tuple]:
-        return connection.execute(sql).fetchall()
+    def run(sql: str) -> list[tuple[Any, ...]]:
+        rows: list[tuple[Any, ...]] = connection.execute(sql).fetchall()
+        return rows
 
     return run
 
 
 def _node(connection, kind: str, num: int, table: str, **fields) -> int:
     """Завести узел вместе с первой ревизией и строкой ревизии его типа."""
-    node_id = connection.execute(
-        "INSERT INTO node (kind, code_num) VALUES (%s, %s) RETURNING id", (kind, num)
-    ).fetchone()[0]
+    node_id = int(
+        connection.execute(
+            "INSERT INTO node (kind, code_num) VALUES (%s, %s) RETURNING id", (kind, num)
+        ).fetchone()[0]
+    )
     connection.execute(
         "INSERT INTO node_revision (node_id, rev, mm_version, author) VALUES (%s, 1, 4, 'тест')",
         (node_id,),
@@ -157,7 +182,8 @@ def test_эволюция_отражена_в_схеме(applied):
 
     def columns(table: str) -> set[str]:
         return {
-            row[0] for row in connection.execute(
+            row[0]
+            for row in connection.execute(
                 "SELECT column_name FROM information_schema.columns WHERE table_name = %s", (table,)
             ).fetchall()
         }
@@ -166,9 +192,12 @@ def test_эволюция_отражена_в_схеме(applied):
     assert "discount" in columns("ord_revision")
     assert "tracking" not in columns("ship_revision")
     assert "phone" in columns("cust_revision")
-    assert connection.execute(
-        "SELECT conname FROM pg_constraint WHERE conname = 'prod_active_since_1'"
-    ).fetchone() is not None
+    assert (
+        connection.execute(
+            "SELECT conname FROM pg_constraint WHERE conname = 'prod_active_since_1'"
+        ).fetchone()
+        is not None
+    )
 
 
 def test_согласованные_данные_проходят_проверки(applied):
@@ -191,7 +220,15 @@ def test_два_покупателя_у_заказа_попадают_в_отч�
     """Верхняя граница кардинальности: схема её не держит, держит проверка целостности."""
     connection, descriptor, _ = applied
     ids = _fill(connection)
-    another = _node(connection, "CUST", 2, "cust_revision", full_name="Второй", email="b@x", registered_at="now()")
+    another = _node(
+        connection,
+        "CUST",
+        2,
+        "cust_revision",
+        full_name="Второй",
+        email="b@x",
+        registered_at="now()",
+    )
     _link(connection, "placed_by", (ids["ord"], "ORD"), (another, "CUST"))
 
     violations = run_checks(checks_for(descriptor), _fetch(connection))
@@ -201,7 +238,9 @@ def test_два_покупателя_у_заказа_попадают_в_отч�
 def test_цикл_по_связи_замены_товара_обнаруживается(applied):
     connection, descriptor, _ = applied
     ids = _fill(connection)
-    other = _node(connection, "PROD", 2, "prod_revision", title="Замена", sku="S-2", price=200, active=True)
+    other = _node(
+        connection, "PROD", 2, "prod_revision", title="Замена", sku="S-2", price=200, active=True
+    )
     _link(connection, "replaces", (ids["prod"], "PROD"), (other, "PROD"))
     _link(connection, "replaces", (other, "PROD"), (ids["prod"], "PROD"))
 
@@ -211,11 +250,38 @@ def test_цикл_по_связи_замены_товара_обнаружива
 
 def _fill(connection) -> dict[str, int]:
     """Согласованный набор данных: покупатель, товар, заказ, строка заказа и их связи."""
-    cust = _node(connection, "CUST", 1, "cust_revision",
-                 full_name="Иванов", email="i@example.com", registered_at="now()", phone="+7")
-    prod = _node(connection, "PROD", 1, "prod_revision", title="Чайник", sku="SKU-1", price=199900, active=True)
-    ord_id = _node(connection, "ORD", 1, "ord_revision",
-                   number="A-1", status="PAID", payment="CARD", placed_at="now()", note="срочно", discount=0)
+    cust = _node(
+        connection,
+        "CUST",
+        1,
+        "cust_revision",
+        full_name="Иванов",
+        email="i@example.com",
+        registered_at="now()",
+        phone="+7",
+    )
+    prod = _node(
+        connection,
+        "PROD",
+        1,
+        "prod_revision",
+        title="Чайник",
+        sku="SKU-1",
+        price=199900,
+        active=True,
+    )
+    ord_id = _node(
+        connection,
+        "ORD",
+        1,
+        "ord_revision",
+        number="A-1",
+        status="PAID",
+        payment="CARD",
+        placed_at="now()",
+        note="срочно",
+        discount=0,
+    )
     item = _node(connection, "ITEM", 1, "item_revision", quantity=2, price=199900)
 
     _link(connection, "placed_by", (ord_id, "ORD"), (cust, "CUST"))

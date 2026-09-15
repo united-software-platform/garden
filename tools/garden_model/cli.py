@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from . import registry
 from .checks import checks_for, run_checks
@@ -23,15 +25,20 @@ DEFAULT_CHANGELOG = Path("changelog")
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    # Обработчик подставлен разбором аргументов и из Namespace приходит нетипизированным:
+    # тип объявляется здесь, у единственной точки вызова.
+    handler: Callable[[argparse.Namespace], int] = args.handler
     try:
-        return args.handler(args)
+        return handler(args)
     except ModelError as error:
         print(f"ОШИБКА  {error}", file=sys.stderr)
         return 1
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="garden-model", description="Контракт модели данных графа требований")
+    parser = argparse.ArgumentParser(
+        prog="garden-model", description="Контракт модели данных графа требований"
+    )
     sub = parser.add_subparsers(required=True)
 
     for name, handler, help_text in (
@@ -44,7 +51,9 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--model", type=Path, default=DEFAULT_MODEL)
         command.add_argument("--releases", type=Path, default=DEFAULT_RELEASES)
         command.add_argument("--changelog", type=Path, default=DEFAULT_CHANGELOG)
-        command.add_argument("--baseline", action="store_true", help="выпустить свёртку модели целиком")
+        command.add_argument(
+            "--baseline", action="store_true", help="выпустить свёртку модели целиком"
+        )
         command.set_defaults(handler=handler)
 
     verify = sub.add_parser("verify", help="сверить схему хранилища с моделью и прогнать проверки")
@@ -55,24 +64,24 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _descriptor(args) -> dict:
+def _descriptor(args: argparse.Namespace) -> dict[str, Any]:
     return compile_model(load_model(args.model))
 
 
-def _build(args) -> int:
+def _build(args: argparse.Namespace) -> int:
     descriptor = _descriptor(args)
     print(f"{descriptor['model']} {descriptor['version']}  {descriptor['hash']}")
     return 0
 
 
-def _diff(args) -> int:
+def _diff(args: argparse.Namespace) -> int:
     descriptor = _descriptor(args)
     previous = find_previous(args.releases, descriptor["major"])
     print(plan_release(descriptor, previous).report())
     return 0
 
 
-def _gen(args) -> int:
+def _gen(args: argparse.Namespace) -> int:
     descriptor = _descriptor(args)
     previous = find_previous(args.releases, descriptor["major"])
 
@@ -91,29 +100,36 @@ def _gen(args) -> int:
         descriptor = _descriptor(args)
 
     args.releases.mkdir(parents=True, exist_ok=True)
-    (args.releases / f"{descriptor['version']}.json").write_text(dump_descriptor(descriptor), encoding="utf-8")
+    (args.releases / f"{descriptor['version']}.json").write_text(
+        dump_descriptor(descriptor), encoding="utf-8"
+    )
     registry.record(args.changelog, descriptor, emitted.files)
     for path in emitted.files:
         print(f"выпущено: {path}")
     return 0
 
 
-def _checks(args) -> int:
+def _checks(args: argparse.Namespace) -> int:
     for check in checks_for(_descriptor(args)):
         print(f"-- {check.name}: {check.subject}\n{check.sql}\n")
     return 0
 
 
-def _verify(args) -> int:
+def _verify(args: argparse.Namespace) -> int:
     import psycopg
 
     descriptor = _descriptor(args)
     problems = [f"changelog: {item}" for item in registry.verify_immutability(args.changelog)]
 
     with psycopg.connect(args.dsn, autocommit=True) as connection:
-        fetch = lambda sql: connection.execute(sql).fetchall()  # noqa: E731
+
+        def fetch(sql: str) -> list[tuple[Any, ...]]:
+            return connection.execute(sql).fetchall()
+
         problems += [f"схема: {drift}" for drift in verify_schema(descriptor, fetch)]
-        problems += [f"целостность: {violation}" for violation in run_checks(checks_for(descriptor), fetch)]
+        problems += [
+            f"целостность: {violation}" for violation in run_checks(checks_for(descriptor), fetch)
+        ]
 
     if not problems:
         print(f"схема соответствует модели {descriptor['version']}")
