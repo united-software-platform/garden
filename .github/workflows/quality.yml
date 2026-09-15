@@ -1,0 +1,34 @@
+# Пайплайн качества кода: оформление, линтер, типы.
+#
+# Шаги раздельные и выполняются все, даже если предыдущий отказал: автор видит все находки
+# за один прогон, а не по одной за отправку. Команды те же, что в целях Makefile, и читают
+# ту же конфигурацию в pyproject.toml — вердикт локального прогона и вердикт пайплайна
+# на одном состоянии кода совпадают.
+name: quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установить uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Оформление — сверка с нормой форматтера
+        run: uv run --quiet --extra dev ruff format --check
+
+      # `!cancelled()` вместо `always()`: отменённый прогон продолжать незачем,
+      # а отказ предыдущего шага выполнению следующего не мешает.
+      - name: Линтер
+        if: ${{ !cancelled() }}
+        run: uv run --quiet --extra dev ruff check
+
+      - name: Проверка типов
+        if: ${{ !cancelled() }}
+        run: uv run --quiet --extra dev mypy

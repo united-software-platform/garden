@@ -1,0 +1,25 @@
+# Пайплайн тестов инструментов модели.
+#
+# Набор прогоняется целиком, включая тесты, которые поднимают временный PostgreSQL:
+# сокращать набор ради времени прогона нельзя — именно эти тесты проверяют, что история
+# миграций укладывается в рабочую схему.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установить uv
+        uses: astral-sh/setup-uv@v5
+
+      # Версия языка берётся из requires-python в pyproject.toml, состав зависимостей —
+      # оттуда же: окружение пайплайна повторяет локальное, а не описывает его заново.
+      - name: Тесты
+        run: uv run --quiet --extra dev pytest -q

@@ -1,6 +1,7 @@
 .PHONY: help init init-host init-env init-dirs init-gitignore init-ssh-key init-ssh-config \
 	openspec-init model-build model-diff model-gen model-checks model-verify model-test \
-	db-up db-down db-apply db-verify
+	db-up db-down db-apply db-verify \
+	format lint typecheck check
 
 .DEFAULT_GOAL := help
 
@@ -205,3 +206,29 @@ db-verify: ## Собрать схему с нуля: пустая база и п
 	@$(MAKE) --no-print-directory db-up
 	@$(MAKE) --no-print-directory db-apply
 	@echo "Схема собрана с нуля. Сверка с моделью: make model-verify DSN=..."
+
+# Инструменты проверки вызываются так же, как их вызывает пайплайн: тем же способом
+# и по той же конфигурации в pyproject.toml. Расхождение вердиктов локального прогона
+# и пайплайна обесценило бы локальный прогон.
+tool_run = uv run --quiet --extra dev
+
+# Единственная цель, правящая файлы: оформление приводится к норме на месте.
+format: ## Привести оформление кода к норме
+	@$(tool_run) ruff format
+
+# Линтер: неиспользуемые имена и импорты, порядок импортов, устаревшие конструкции.
+# Оформление проверяется отдельно — форматтером, а не набором правил.
+lint: ## Проверить оформление и найти дефекты кода
+	@$(tool_run) ruff format --check
+	@$(tool_run) ruff check
+
+# Строгая проверка типов. Состав проверяемых путей задан в pyproject.toml,
+# поэтому цель не перечисляет их второй раз.
+typecheck: ## Проверить типы
+	@$(tool_run) mypy
+
+# Точка входа набора проверок. Под-цели вызываются рецептом, а не зависимостями:
+# при make -j они пошли бы параллельно и перемешали вывод.
+check: ## Прогнать все проверки качества кода
+	@$(MAKE) --no-print-directory lint
+	@$(MAKE) --no-print-directory typecheck
