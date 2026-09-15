@@ -1,0 +1,23 @@
+model: trade
+version: 1.0.0
+enums:
+  order_status:
+    id: 1
+    values:
+    - id: 1
+      name: DRAFT
+    - id: 2
+      name: PAID
+    - id: 3
+      name: SHIPPED
+    - id: 4
+      name: CANCELLED
+  payment_method:
+    id: 2
+    values:
+    - id: 1
+      name: CARD
+    - id: 2
+      name: CASH
+    - id: 3
+      name: TRANSFER

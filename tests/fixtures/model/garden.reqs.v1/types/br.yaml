@@ -1,0 +1,18 @@
+type: BR
+id: 1
+name:
+  ru: Бизнес-требование
+  en: Business Requirement
+description: Потребность бизнеса, из которой выводятся функциональные требования
+
+fields:
+  - { id: 1, name: title, type: text, required: true, description: Краткая формулировка }
+  - { id: 2, name: value, type: text, required: true }
+  - { id: 3, name: status, type: enum.req_status, required: true }
+  - { id: 4, name: origin, type: text }
+  - { id: 5, name: rationale, type: text, required: true, required_since: 2 }
+
+taken:
+  fields: [7]
+  names: [priority]
+  codes: [19]

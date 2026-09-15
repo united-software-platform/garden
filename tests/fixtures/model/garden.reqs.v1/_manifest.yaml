@@ -1,0 +1,10 @@
+model: garden.reqs
+version: 1.2.0
+
+enums:
+  req_status:
+    id: 1
+    values:
+      - { id: 1, name: DRAFT }
+      - { id: 2, name: APPROVED }
+      - { id: 3, name: RETIRED }

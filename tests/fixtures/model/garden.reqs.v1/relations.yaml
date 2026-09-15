@@ -1,0 +1,8 @@
+relations:
+  - id: 1
+    name: realizes
+    from: [FR]
+    to: [BR]
+    from_cardinality: { min: 1 }
+    acyclic: true
+    description: Функциональное требование реализует бизнес-требование

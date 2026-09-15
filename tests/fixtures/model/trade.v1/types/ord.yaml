@@ -1,0 +1,24 @@
+type: ORD
+id: 3
+name:
+  ru: Заказ
+  en: Order
+fields:
+- id: 1
+  name: number
+  type: text
+  required: true
+- id: 2
+  name: status
+  type: enum.order_status
+  required: true
+- id: 3
+  name: payment
+  type: enum.payment_method
+- id: 4
+  name: placed_at
+  type: timestamp
+  required: true
+- id: 5
+  name: comment
+  type: text

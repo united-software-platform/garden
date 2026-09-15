@@ -1,0 +1,16 @@
+type: SHIP
+id: 5
+name:
+  ru: Отгрузка
+  en: Shipment
+fields:
+- id: 1
+  name: carrier
+  type: text
+  required: true
+- id: 2
+  name: tracking
+  type: text
+- id: 3
+  name: shipped_at
+  type: timestamp

@@ -1,0 +1,23 @@
+type: PROD
+id: 2
+name:
+  ru: Товар
+  en: Product
+fields:
+- id: 1
+  name: title
+  type: text
+  required: true
+- id: 2
+  name: sku
+  type: text
+  required: true
+- id: 3
+  name: price
+  type: int
+  required: true
+  description: Цена в копейках
+- id: 4
+  name: active
+  type: bool
+  required: false

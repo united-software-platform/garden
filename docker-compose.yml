@@ -34,3 +34,45 @@ services:
       # сам .env внутри контейнера пустой. compose читает его на хосте — маскировка не мешает
       - /dev/null:${PROJECT_DIR:-/app}/.env:ro
 
+  postgres:
+    # Хранилище графа требований. Отдельный compose-профиль: база поднимается целями db-*,
+    # а сессия агента её не требует — модель и миграции собираются без подключения.
+    image: ${DB_IMAGE:-postgres:17-alpine}
+    profiles: ["db"]
+    environment:
+      POSTGRES_DB: ${DB_NAME:-garden}
+      POSTGRES_USER: ${DB_USER:-garden}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-garden}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - model-db:/var/lib/postgresql/data
+    # Готовность проверяется явно: Liquibase стартует сразу после up и без ожидания
+    # упёрся бы в ещё не принимающий соединения сервер
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-garden} -d ${DB_NAME:-garden}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  liquibase:
+    # Применение миграций. Редакция Community: политик checks и точечного отката в ней нет,
+    # но они и не нужны — совместимость проверяется на уровне модели, до выпуска миграции.
+    image: ${LIQUIBASE_IMAGE:-liquibase/liquibase:4.33-alpine}
+    profiles: ["db"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Каталог миграций монтируется только на чтение: выпущенный файл неизменяем,
+    # и Liquibase не должен иметь возможности его переписать
+    volumes:
+      - ./changelog:/liquibase/changelog:ro
+    command:
+      - --changelog-file=changelog/master.yaml
+      - --url=jdbc:postgresql://postgres:5432/${DB_NAME:-garden}
+      - --username=${DB_USER:-garden}
+      - --password=${DB_PASSWORD:-garden}
+      - update
+
+volumes:
+  model-db:

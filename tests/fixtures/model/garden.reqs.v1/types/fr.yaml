@@ -1,0 +1,9 @@
+type: FR
+id: 2
+name:
+  ru: Функциональное требование
+  en: Functional Requirement
+
+fields:
+  - { id: 1, name: title, type: text, required: true }
+  - { id: 2, name: status, type: enum.req_status, required: true }

@@ -1,0 +1,9 @@
+type: ITEM
+id: 4
+name:
+  ru: Строка заказа
+  en: Order Item
+
+fields:
+  - { id: 1, name: quantity, type: int, required: true }
+  - { id: 2, name: price,    type: int, required: true, description: Цена на момент заказа }
